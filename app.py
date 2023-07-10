@@ -35,14 +35,18 @@ def plot_mapa(dict_query):
 	query = monta_query(dict_query)
 
 	#soma = df.query(f"SG_UF == '{filtro_uf}' ").groupby(['NM_MUNICIPIO']).QT_VOTOS_NOMINAIS_VALIDOS.sum().reset_index()
-	soma = df.query(f"{query}").groupby(['NM_MUNICIPIO']).QT_VOTOS_NOMINAIS_VALIDOS.sum().reset_index()
-	soma_munic = soma.set_index('NM_MUNICIPIO')['QT_VOTOS_NOMINAIS_VALIDOS']
+	soma = (df.query(f"{query}").groupby(['NM_MUNICIPIO']).QT_VOTOS_NOMINAIS_VALIDOS
+			.sum().reset_index().rename(columns = {"QT_VOTOS_NOMINAIS_VALIDOS":"QT_VOTOS"})
+			)
+	
+	soma_munic = soma.set_index('NM_MUNICIPIO')['QT_VOTOS']
 	print("LEN:",len(soma_munic),"\n")
 
 	soma_munic = (soma_munic / soma_munic.sum()) * 100
-	soma_munic = soma_munic[:]
+	#soma_munic = soma_munic[:]
 
-	soma_munic[soma_munic > 8] = soma_munic.median()
+	#soma_munic[soma_munic > 8] = soma_munic.median()
+	soma['PERCT_VOTOS'] = (soma.QT_VOTOS / soma.QT_VOTOS.sum()) * 100
 
 	geo_munic_select = {'type': 'FeatureCollection'}
 	geo_munic_select['features'] = []
@@ -77,31 +81,34 @@ def plot_mapa(dict_query):
 	  fill_color= "OrRd",#"YlOrRd", #"YlGn",
 	  #fill_opacity=0.7,
 	  #line_opacity=0.2,
-	  legend_name="Votos Eleições 2020"
+	  legend_name="Votos Eleições 2020 (em %)"
 	).add_to(m)
 
-	return m,soma_munic
+	return m,soma
 
 
 @st.cache_resource
 def monta_query(*argumentos):
-  query = "and "
-  list_query = []
-  field_query = argumentos[0] 
-  for key in field_query:
-    value_query = field_query[key]
-    if value_query != "TODOS":
-      #print(""" query.join() += f"{k} = '{dict_query[k]}' """)
-      list_query.append( f"{key} == '{value_query}' ")
-      
-  query = query.join(list_query)
-  return query
+	query = "and "
+	list_query = []
+	field_query = argumentos[0] 
+	for key in field_query:
+		value_query = field_query[key]
+		if value_query != "TODOS":
+			#print(""" query.join() += f"{k} = '{dict_query[k]}' """)
+			if isinstance(value_query,list):
+				list_query.append( f" {key} in {value_query} ")
+			else:
+				list_query.append( f" {key} == '{value_query}' ")
+
+	query = query.join(list_query)
+	return query
 
 geo_munic, geo_uf, df = carregar_dados()
 
 #@st.cache_resource(experimental_allow_widgets=True)
 #def main():
-FILTRO_UF 		= st.sidebar.selectbox('SELECIONE A UF:', df.SG_UF.unique() )
+FILTRO_UF 		= st.sidebar.selectbox('SELECIONE A UF:', df.sort_values('SG_UF').SG_UF.unique() )
 
 FILTRO_NR_TURNO = st.sidebar.selectbox('SELECIONE O TURNO :', 
 	df.query(f"SG_UF == '{FILTRO_UF}'").NR_TURNO.unique())
@@ -109,10 +116,10 @@ FILTRO_NR_TURNO = st.sidebar.selectbox('SELECIONE O TURNO :',
 FILTRO_NM_MUNICIPIO = "TODOS" #st.sidebar.selectbox('SELECIONE O MUNICÍPIO :', df.NM_MUNICIPIO.unique() )
 
 FILTRO_DS_CARGO 	= st.sidebar.selectbox('SELECIONE CARGO :', 
-	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' ").DS_CARGO.unique() )
+	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
 
 FILTRO_SG_PARTIDO 	= st.sidebar.selectbox('SELECIONE PARTIDO:', 
-	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ").SG_PARTIDO.unique() )
+	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ").sort_values('SG_PARTIDO').SG_PARTIDO.unique() )
 
 FILTRO_DS_SIT_TOT_TURNO = "TODOS" #st.sidebar.selectbox('SELECIONE SITUAÇÃO TURNO :', df.DS_SIT_TOT_TURNO.unique() )
 
@@ -138,10 +145,10 @@ dict_query = {
 m, df = plot_mapa(dict_query)
 
 with st.container():
-	col1, col2 = st.columns(2)
+	col1, col2 = st.columns([0.65,0.35])
 
 	with col1:
-		st.write('Caption for first chart')
+		st.header('Votos')
 		st.dataframe(df)#.sort_values("QT_VOTOS_NOMINAIS_VALIDOS"))  # Same as st.write(df)
 
 	with col2:
