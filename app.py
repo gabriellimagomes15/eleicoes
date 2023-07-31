@@ -35,9 +35,13 @@ def plot_mapa(dict_query):
 	query = monta_query(dict_query)
 
 	#soma = df.query(f"SG_UF == '{filtro_uf}' ").groupby(['NM_MUNICIPIO']).QT_VOTOS_NOMINAIS_VALIDOS.sum().reset_index()
-	soma = (df.query(f"{query}").groupby(['NM_MUNICIPIO']).QT_VOTOS_NOMINAIS_VALIDOS
+	filtro_df = df.query(f"{query}")
+
+
+	soma = (filtro_df.groupby(['NM_MUNICIPIO']).QT_VOTOS_NOMINAIS_VALIDOS
 			.sum().reset_index().rename(columns = {"QT_VOTOS_NOMINAIS_VALIDOS":"QT_VOTOS"})
 			)
+
 	
 	soma_munic = soma.set_index('NM_MUNICIPIO')['QT_VOTOS']
 	print("LEN:",len(soma_munic),"\n")
@@ -47,6 +51,7 @@ def plot_mapa(dict_query):
 
 	#soma_munic[soma_munic > 8] = soma_munic.median()
 	soma['PERCT_VOTOS'] = (soma.QT_VOTOS / soma.QT_VOTOS.sum()) * 100
+	soma['PERCT_VOTOS'] = soma['PERCT_VOTOS'].apply(lambda x: f"""{round(x,2)}%""")
 
 	geo_munic_select = {'type': 'FeatureCollection'}
 	geo_munic_select['features'] = []
@@ -84,7 +89,7 @@ def plot_mapa(dict_query):
 	  legend_name="Votos Eleições 2020 (em %)"
 	).add_to(m)
 
-	return m,soma
+	return m,soma,filtro_df
 
 
 @st.cache_resource
@@ -119,7 +124,8 @@ FILTRO_DS_CARGO 	= st.sidebar.selectbox('SELECIONE CARGO :',
 	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
 
 FILTRO_SG_PARTIDO 	= st.sidebar.selectbox('SELECIONE PARTIDO:', 
-	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ").sort_values('SG_PARTIDO').SG_PARTIDO.unique() )
+	(df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ")
+		.sort_values('SG_PARTIDO').SG_PARTIDO.unique() ) )
 
 FILTRO_DS_SIT_TOT_TURNO = "TODOS" #st.sidebar.selectbox('SELECIONE SITUAÇÃO TURNO :', df.DS_SIT_TOT_TURNO.unique() )
 
@@ -142,17 +148,36 @@ dict_query = {
 
 	#filtro_uf = 'RO'
 
-m, df = plot_mapa(dict_query)
+titulos_guias = ['Análise 1 UF', 'Tópico B', 'Tópico C']
+guia1, guia2, guia3 = st.tabs(titulos_guias)
 
-with st.container():
-	col1, col2 = st.columns([0.65,0.35])
 
-	with col1:
-		st.header('Votos')
-		st.dataframe(df)#.sort_values("QT_VOTOS_NOMINAIS_VALIDOS"))  # Same as st.write(df)
+with guia1:
+	m,soma_df,filtro_uf = plot_mapa(dict_query)
 
-	with col2:
-		# call to render Folium map in Streamlit
-		#st_data = st_folium(m, width=725)
-		#st_data = 
-		folium_static(m, width=725)
+	col1, col2, col3 = st.columns(3)
+	col1.metric("QTD Candidatos", filtro_uf.NM_CANDIDATO.nunique()) #, "1.2 °F")
+	col2.metric("QTD Eleitos", len(filtro_uf.query("DS_SIT_TOT_TURNO=='ELEITO'").DS_SIT_TOT_TURNO) ) #, "-8%")
+	col3.metric("Proporção Votos (total)", f"""
+									{round(filtro_uf.QT_VOTOS_NOMINAIS_VALIDOS.sum()/
+									df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ").QT_VOTOS_NOMINAIS_VALIDOS.sum(),3 )*100} %""" ) #, , "4%")
+
+	with st.container():
+		#col1 = st.columns([1])
+
+		#with col1:
+			# call to render Folium map in Streamlit
+			#st_data = st_folium(m, width=725)
+			#st_data = 
+		folium_static(m, width=600)
+	
+	with st.container():
+		col2,col3 = st.columns([0.8,0.2])
+
+		with col2:
+			st.header('Votos')
+			st.dataframe(soma_df.rename(columns = {'NM_MUNICIPIO':'MUNICIPIO',
+										 'PERCT_VOTOS':'% Votos'} ),
+						width = 500)#.sort_values("QT_VOTOS_NOMINAIS_VALIDOS"))  # Same as st.write(df)
+
+	
