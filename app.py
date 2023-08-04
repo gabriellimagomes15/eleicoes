@@ -109,6 +109,29 @@ def monta_query(*argumentos):
 	query = query.join(list_query)
 	return query
 
+@st.cache_data 
+def monta_planilha(dados):
+	#QTD VOTOS GERAL
+	qtd_geral = dados.groupby(["SG_UF","NM_MUNICIPIO","SG_PARTIDO"]).agg({"QT_VOTOS_NOMINAIS_VALIDOS":'sum'}).reset_index()
+
+	# QTD VOTOS POR CARGO
+	qtd_cargo = dados.groupby(["SG_UF","NM_MUNICIPIO","SG_PARTIDO","DS_CARGO"]).agg({"QT_VOTOS_NOMINAIS_VALIDOS":'sum'}).reset_index()
+	qtd_cargo = pd.pivot_table(qtd_cargo,index=['SG_UF','NM_MUNICIPIO','SG_PARTIDO'],values='QT_VOTOS_NOMINAIS_VALIDOS',columns = 'DS_CARGO' ).reset_index() #index=['SG_UF','NM_MUNICIPIO','SG_PARTIDO']).reset_index()
+
+	df_qtd_votos = qtd_geral.merge(qtd_cargo, on=["SG_UF","NM_MUNICIPIO","SG_PARTIDO"])
+
+	## CRIANDO NOVAS COLUNAS
+	novas_colunas = ["ARRECADAÇAO_TRIBUTARIA","ORÇAMENTO_MUNICIPAL","VICE-PREFEITURA","DEPT_ESTADUAL_2022","DEPT_FEDERAL_202","SENADO_2022","GOVERNO_DE_ESTADO","DISPERSAO_DO_1_TURNO_2022",
+	"BAN","DIRETÓRIO_MAIS_DE_1_ANO","FUNDO_ELEITORAL_2020","DOAÇÕES_2020","FUNDO_PARTIDARIO_2020","TOTAL_DE_RECEITAS","TOTAL_DE_DESPESAS",
+	"TOTAL_DE_DESPESAS_PAGAS","TOTAL_DE_PENDENCIAS"]
+
+	for col in novas_colunas:
+	  df_qtd_votos[col] = "PENDENTE"
+	  
+	df_qtd_votos.columns = [c.upper() for c in df_qtd_votos.columns]
+
+	return df_qtd_votos
+
 geo_munic, geo_uf, df = carregar_dados()
 
 #@st.cache_resource(experimental_allow_widgets=True)
@@ -148,11 +171,29 @@ dict_query = {
 
 	#filtro_uf = 'RO'
 
-titulos_guias = ['Análise 1 UF', 'Tópico B', 'Tópico C']
+titulos_guias = ['Planilha','Análise 1 UF', 'Tópico C']
 guia1, guia2, guia3 = st.tabs(titulos_guias)
+
+@st.cache_data 
+def convert_df(df):
+    # IMPORTANT: Cache the conversion to prevent computation on every rerun
+    return df.to_csv(sep=';', index = False ).encode('latin1')
 
 
 with guia1:
+	#with st.container():
+	col1,col2 = st.columns([0.9,0.1])
+
+	with col1:
+		df_planilha = monta_planilha(df)
+		st.header(f'Planilha Geral' )
+		st.dataframe( df_planilha , width = 750)
+
+		csv = convert_df(df_planilha)
+		st.download_button( label="Download Dados(.csv)",data=csv,
+							file_name='eleicoes.csv', mime='text/csv')
+		
+with guia2:
 	m,soma_df,filtro_uf = plot_mapa(dict_query)
 
 	col1, col2, col3 = st.columns(3)
