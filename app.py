@@ -186,8 +186,10 @@ with guia1:
 
 	with col1:
 		df_planilha = monta_planilha(df)
-		st.header(f'Planilha Geral' )
-		st.dataframe( df_planilha , width = 750)
+		st.title(f'Planilha Geral' )
+		st.markdown(f"""Visualização das 20 primeiras linhas. """)
+		st.markdown(f"""Para visualizar todas as **{len(df_planilha)}** linhas fazer download do arquivo.""")
+		st.dataframe( df_planilha.head(20), width = 750)
 
 		csv = convert_df(df_planilha)
 		st.download_button( label="Download Dados(.csv)",data=csv,
