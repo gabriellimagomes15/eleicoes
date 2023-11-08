@@ -192,6 +192,7 @@ with guia1:
 
 	with col1:
 		df_planilha = planilha.copy() #monta_planilha(df)
+		df_planilha.ANO_ELEICAO = df_planilha.ANO_ELEICAO.astype("str") 
 		st.title(f'Planilha Geral' )
 		st.markdown(f"""Visualização das 20 primeiras linhas. """)
 		st.markdown(f"""Para visualizar todas as **{len(df_planilha)}** linhas fazer download do arquivo.""")
