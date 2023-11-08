@@ -26,9 +26,14 @@ def carregar_dados():
 	df = pd.read_csv("grupo2.csv")
 	df.NR_TURNO = df.NR_TURNO.astype(str)
 
-	print("leu geo df")
+	print("leu df")
 
-	return geo_munic, geo_uf, df
+	planilha = pd.read_csv("planilha.csv")
+	planilha.NR_TURNO = planilha.NR_TURNO.astype(str)
+
+	print("leu planilha")
+
+	return geo_munic, geo_uf, df, planilha
 
 @st.cache_resource 
 def plot_mapa(dict_query):
@@ -132,7 +137,8 @@ def monta_planilha(dados):
 
 	return df_qtd_votos
 
-geo_munic, geo_uf, df = carregar_dados()
+## CARREGANDO DADOS
+geo_munic, geo_uf, df, planilha = carregar_dados()
 
 #@st.cache_resource(experimental_allow_widgets=True)
 #def main():
@@ -185,11 +191,11 @@ with guia1:
 	col1,col2 = st.columns([0.9,0.1])
 
 	with col1:
-		df_planilha = monta_planilha(df)
+		df_planilha = planilha.copy() #monta_planilha(df)
 		st.title(f'Planilha Geral' )
 		st.markdown(f"""Visualização das 20 primeiras linhas. """)
 		st.markdown(f"""Para visualizar todas as **{len(df_planilha)}** linhas fazer download do arquivo.""")
-		st.dataframe( df_planilha.head(20), width = 750)
+		st.dataframe( df_planilha.style.format("{:.0f}").head(20), width = 750)
 
 		csv = convert_df(df_planilha)
 		st.download_button( label="Download Dados(.csv)",data=csv,
