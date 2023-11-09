@@ -202,6 +202,68 @@ with guia1:
 		st.download_button( label="Download Dados(.csv)",data=csv,
 							file_name='eleicoes.csv', mime='text/csv')
 		
+		st.title(f'OPÇÃO 1 DO MAPA' )
+		
+		import random
+		geo_munic_selecionado = {'type': 'FeatureCollection'}
+		geo_munic_selecionado['features'] = []
+
+		for muni in geo_munic['features'][:2500]:
+		  geo_munic_selecionado['features'].append(muni)
+
+		lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado['features'] ]#.keys()
+		
+		#lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado ]#.keys()
+		inputNumbers = range(0,len(lista_munic))
+		r = random.sample(inputNumbers,len(lista_munic))
+
+		dados = pd.DataFrame(zip(lista_munic, r),columns=['MUNI','VR'])
+		dados2 = dados.set_index('MUNI')['VR']
+
+		m = folium.Map(
+		  #tiles="Cartodb Positron",
+		  #tiles="Stamen Watercolor",
+		  width="100%", height="100%",
+		  #width=900, height=600,
+		  location= [-15.77972, -47.92972],
+		  zoom_start=4
+		)
+		folium.Choropleth(
+		  geo_data=geo_munic_selecionado,
+		  name="choropleth",
+		  data=dados2,
+		  #data=state_data,
+		  #columns=["MUNI", "VR"],
+		  key_on="properties.name",
+		  fill_color= "OrRd",#"YlOrRd", #"YlGn",
+		  #fill_opacity=0.7,
+		  #line_opacity=0.2,
+		  legend_name="Prioridade do Municipio"
+		).add_to(m)
+
+		folium_static(m, width=600)
+		
+
+		st.title(f'OPÇÃO 2 DO MAPA' )
+		r2 = [ x['geometry']['coordinates'][0][0] for x in geo_munic_selecionado['features'] ]#.keys()
+
+		m = folium.Map(
+		  #tiles="Cartodb Positron",
+		  #tiles="Stamen Watercolor",
+		  width="100%", height="100%",
+		  #width=900, height=600,
+		  location= [-15.77972, -47.92972],
+		  zoom_start=4
+		)
+		for x in r2:
+		  #print(x[1],x[0])
+		  folium.Circle(
+		      location =  [x[1],x[0]], #[lat_, long_],
+		      radius=11,
+		    ).add_to(m)
+		folium_static(m, width=600)
+
+
 with guia2:
 	m,soma_df,filtro_uf = plot_mapa(dict_query)
 
