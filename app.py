@@ -7,6 +7,7 @@ import pandas as pd
 import json
 from urllib.request import urlopen
 from io import BytesIO
+import numpy as np
 
 #(allow_output_mutation=True)
 @st.cache_data 
@@ -142,27 +143,28 @@ geo_munic, geo_uf, df, planilha = carregar_dados()
 
 #@st.cache_resource(experimental_allow_widgets=True)
 #def main():
-FILTRO_UF 		= st.sidebar.selectbox('SELECIONE A UF:', df.sort_values('SG_UF').SG_UF.unique() )
+#FILTRO_UF 		= st.sidebar.selectbox('SELECIONE A UF:', df.sort_values('SG_UF').SG_UF.unique() )
 
-FILTRO_NR_TURNO = st.sidebar.selectbox('SELECIONE O TURNO :', 
-	df.query(f"SG_UF == '{FILTRO_UF}'").NR_TURNO.unique())
+FILTRO_NR_TURNO = st.sidebar.selectbox('SELECIONE O TURNO :', df.NR_TURNO.unique())
+	#df.query(f"SG_UF == '{FILTRO_UF}'").NR_TURNO.unique())
 
 FILTRO_NM_MUNICIPIO = "TODOS" #st.sidebar.selectbox('SELECIONE O MUNICÍPIO :', df.NM_MUNICIPIO.unique() )
 
-FILTRO_DS_CARGO 	= st.sidebar.selectbox('SELECIONE CARGO :', 
-	df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
+#FILTRO_DS_CARGO 	= st.sidebar.selectbox('SELECIONE CARGO :', 
+#	df.query(f"NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
+	#df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
 
 FILTRO_SG_PARTIDO 	= st.sidebar.selectbox('SELECIONE PARTIDO:', 
-	(df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ")
+	(df.query(f"NR_TURNO == '{FILTRO_NR_TURNO}' ")
 		.sort_values('SG_PARTIDO').SG_PARTIDO.unique() ) )
 
 FILTRO_DS_SIT_TOT_TURNO = "TODOS" #st.sidebar.selectbox('SELECIONE SITUAÇÃO TURNO :', df.DS_SIT_TOT_TURNO.unique() )
 
 dict_query = {
 	  "NR_TURNO": FILTRO_NR_TURNO,
-	  "SG_UF": FILTRO_UF,
+	  #"SG_UF": FILTRO_UF,
 	  "NM_MUNICIPIO": FILTRO_NM_MUNICIPIO,
-	  "DS_CARGO": FILTRO_DS_CARGO,
+	  #"DS_CARGO": FILTRO_DS_CARGO,
 	  "SG_PARTIDO": FILTRO_SG_PARTIDO,
 	  "DS_SIT_TOT_TURNO": FILTRO_DS_SIT_TOT_TURNO          
 	}
@@ -191,34 +193,51 @@ with guia1:
 	col1,col2 = st.columns([0.9,0.1])
 
 	with col1:
+		monta_query(dict_query)
+		print(planilha.columns)
 		df_planilha = planilha.copy() #monta_planilha(df)
 		df_planilha.ANO_ELEICAO = df_planilha.ANO_ELEICAO.astype("str") 
-		st.title(f'Planilha Geral' )
+		st.title(f'Planilha Geral ' )
 		st.markdown(f"""Visualização das 20 primeiras linhas. """)
 		st.markdown(f"""Para visualizar todas as **{len(df_planilha)}** linhas fazer download do arquivo.""")
-		st.dataframe( df_planilha.head(20), width = 750)
+		st.dataframe( df_planilha.query(monta_query(dict_query)).head(20), width = 750)
 
 		csv = convert_df(df_planilha)
 		st.download_button( label="Download Dados(.csv)",data=csv,
 							file_name='eleicoes.csv', mime='text/csv')
 		
-		st.title(f'OPÇÃO 1 DO MAPA' )
+		st.title(f'% de gastos sobre a receita' )
+		#st.markdown(f'valores com % de gastos sobre a receita' )
 		
+
 		import random
 		geo_munic_selecionado = {'type': 'FeatureCollection'}
 		geo_munic_selecionado['features'] = []
 
-		for muni in geo_munic['features'][:2500]:
-		  geo_munic_selecionado['features'].append(muni)
-
-		lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado['features'] ]#.keys()
+		#lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado['features'] ]#.keys()
 		
 		#lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado ]#.keys()
-		inputNumbers = range(0,len(lista_munic))
-		r = random.sample(inputNumbers,len(lista_munic))
+		#inputNumbers = range(0,len(lista_munic))
+		#r = random.sample(inputNumbers,len(lista_munic))
 
-		dados = pd.DataFrame(zip(lista_munic, r),columns=['MUNI','VR'])
-		dados2 = dados.set_index('MUNI')['VR']
+		#dados = pd.DataFrame(zip(lista_munic, r),columns=['MUNI','VR'])
+		dados = df_planilha.query(monta_query(dict_query))
+		dados = dados.loc[(dados.PERC_GASTO != np.Inf) &
+								#	(df_planilha.SG_PARTIDO.isin(['PT','PMDB','PSL']) ) &
+									(dados.PERC_GASTO <= 1), 
+								['NM_UE','PERC_GASTO']]
+
+		#teste = df_final.loc[ df_final.PERC_GASTO == np.Inf]
+		dados.fillna(0,inplace=True)
+
+		for muni in geo_munic['features'][:]:
+			#print(muni)
+			if muni['properties']['name'].upper() in dados.NM_UE.unique():
+		  		geo_munic_selecionado['features'].append(muni)
+
+
+		dados2 = dados.set_index('NM_UE')['PERC_GASTO']
+		#st.dataframe( dados.describe(), width = 750)
 
 		m = folium.Map(
 		  #tiles="Cartodb Positron",
@@ -238,7 +257,7 @@ with guia1:
 		  fill_color= "OrRd",#"YlOrRd", #"YlGn",
 		  #fill_opacity=0.7,
 		  #line_opacity=0.2,
-		  legend_name="Prioridade do Municipio"
+		  legend_name=" `%` dos Gastos"
 		).add_to(m)
 
 		folium_static(m, width=600)
@@ -265,6 +284,7 @@ with guia1:
 
 
 with guia2:
+	'''
 	m,soma_df,filtro_uf = plot_mapa(dict_query)
 
 	col1, col2, col3 = st.columns(3)
@@ -272,7 +292,7 @@ with guia2:
 	col2.metric("QTD Eleitos", len(filtro_uf.query("DS_SIT_TOT_TURNO=='ELEITO'").DS_SIT_TOT_TURNO) ) #, "-8%")
 	col3.metric("Proporção Votos (total)", f"""
 									{round(filtro_uf.QT_VOTOS_NOMINAIS_VALIDOS.sum()/
-									df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' and DS_CARGO == '{FILTRO_DS_CARGO}' ").QT_VOTOS_NOMINAIS_VALIDOS.sum(),3 )*100} %""" ) #, , "4%")
+									df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}'  ").QT_VOTOS_NOMINAIS_VALIDOS.sum(),3 )*100} %""" ) #, , "4%")
 
 	with st.container():
 		#col1 = st.columns([1])
@@ -292,4 +312,4 @@ with guia2:
 										 'PERCT_VOTOS':'% Votos'} ),
 						width = 500)#.sort_values("QT_VOTOS_NOMINAIS_VALIDOS"))  # Same as st.write(df)
 
-	
+	'''
