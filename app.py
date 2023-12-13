@@ -8,6 +8,7 @@ import json
 from urllib.request import urlopen
 from io import BytesIO
 import numpy as np
+import plotly.express as px
 
 #(allow_output_mutation=True)
 @st.cache_data 
@@ -20,8 +21,8 @@ def carregar_dados():
 	    geo_munic = json.load(openfile)
 	print("leu geo municipios")
 
-	geo_uf = pd.read_csv("https://raw.githubusercontent.com/kelvins/Municipios-Brasileiros/main/csv/estados.csv")
-	print("leu geo uf")
+	#geo_uf = pd.read_csv("https://raw.githubusercontent.com/kelvins/Municipios-Brasileiros/main/csv/estados.csv")
+	#print("leu geo uf")
 
 	#df = pd.read_csv("https://raw.githubusercontent.com/gabriellimagomes15/eleicoes/main/grupo.csv")
 	df = pd.read_csv("grupo2.csv")
@@ -33,8 +34,18 @@ def carregar_dados():
 	planilha.NR_TURNO = planilha.NR_TURNO.astype(str)
 
 	print("leu planilha")
+	
+	url = "https://raw.githubusercontent.com/datalivre/Conjunto-de-Dados/master/br_states.json"
+	json_url = urlopen(url)
+	geo_uf = json.loads(json_url.read())
+	print("leu geo uf")
+	
+	df_qtd_bu = pd.read_csv("df_qtd_bu.csv")
+	df_receitas = pd.read_csv("df_receitas.csv")
+	df_desp_contrat_paga = pd.read_csv("df_desp_contrat_paga.csv")
 
-	return geo_munic, geo_uf, df, planilha
+
+	return geo_munic, geo_uf, df, planilha,df_qtd_bu,df_receitas,df_desp_contrat_paga
 
 @st.cache_resource 
 def plot_mapa(dict_query):
@@ -138,150 +149,79 @@ def monta_planilha(dados):
 
 	return df_qtd_votos
 
-## CARREGANDO DADOS
-geo_munic, geo_uf, df, planilha = carregar_dados()
-
-#@st.cache_resource(experimental_allow_widgets=True)
-#def main():
-#FILTRO_UF 		= st.sidebar.selectbox('SELECIONE A UF:', df.sort_values('SG_UF').SG_UF.unique() )
-
-FILTRO_NR_TURNO = st.sidebar.selectbox('SELECIONE O TURNO :', df.NR_TURNO.unique())
-	#df.query(f"SG_UF == '{FILTRO_UF}'").NR_TURNO.unique())
-
-FILTRO_NM_MUNICIPIO = "TODOS" #st.sidebar.selectbox('SELECIONE O MUNICÍPIO :', df.NM_MUNICIPIO.unique() )
-
-#FILTRO_DS_CARGO 	= st.sidebar.selectbox('SELECIONE CARGO :', 
-#	df.query(f"NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
-	#df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}' ").sort_values('DS_CARGO').DS_CARGO.unique() )
-
-FILTRO_SG_PARTIDO 	= st.sidebar.selectbox('SELECIONE PARTIDO:', 
-	(df.query(f"NR_TURNO == '{FILTRO_NR_TURNO}' ")
-		.sort_values('SG_PARTIDO').SG_PARTIDO.unique() ) )
-
-FILTRO_DS_SIT_TOT_TURNO = "TODOS" #st.sidebar.selectbox('SELECIONE SITUAÇÃO TURNO :', df.DS_SIT_TOT_TURNO.unique() )
-
-dict_query = {
-	  "NR_TURNO": FILTRO_NR_TURNO,
-	  #"SG_UF": FILTRO_UF,
-	  "NM_MUNICIPIO": FILTRO_NM_MUNICIPIO,
-	  #"DS_CARGO": FILTRO_DS_CARGO,
-	  "SG_PARTIDO": FILTRO_SG_PARTIDO,
-	  "DS_SIT_TOT_TURNO": FILTRO_DS_SIT_TOT_TURNO          
-	}
-#	return dict_query
-
-
-#dict_query = main()
-#if st.sidebar.button('Gerar gráfico'):
-	
-	#monta_query1(p1,p2)
-	#st.write('query:', query)
-
-	#filtro_uf = 'RO'
-
-titulos_guias = ['Planilha','Análise 1 UF', 'Tópico C']
-guia1, guia2, guia3 = st.tabs(titulos_guias)
-
 @st.cache_data 
 def convert_df(df):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv(sep=';', index = False ).encode('latin1')
 
 
+titulos_guias = ['Planilha','Análise','text']
+guia1, guia2, guia3 = st.tabs(titulos_guias)
+
+
+## CARREGANDO DADOS
+geo_munic, geo_uf, df, planilha, df_qtd_bu, df_receitas,df_desp_contrat_paga = carregar_dados()
+
 with guia1:
 	#with st.container():
 	col1,col2 = st.columns([0.9,0.1])
 
 	with col1:
-		monta_query(dict_query)
-		print(planilha.columns)
+
+		#monta_query(dict_query)
+		#print(planilha.columns)
 		df_planilha = planilha.copy() #monta_planilha(df)
 		df_planilha.ANO_ELEICAO = df_planilha.ANO_ELEICAO.astype("str") 
+		
 		st.title(f'Planilha Geral ' )
 		st.markdown(f"""Visualização das 20 primeiras linhas. """)
 		st.markdown(f"""Para visualizar todas as **{len(df_planilha)}** linhas fazer download do arquivo.""")
-		st.dataframe( df_planilha.query(monta_query(dict_query)).head(20), width = 750)
+		st.dataframe( df_planilha.head(20), width = 750)
 
 		csv = convert_df(df_planilha)
 		st.download_button( label="Download Dados(.csv)",data=csv,
 							file_name='eleicoes.csv', mime='text/csv')
 		
-		st.title(f'% de gastos sobre a receita' )
-		#st.markdown(f'valores com % de gastos sobre a receita' )
 		
 
-		import random
-		geo_munic_selecionado = {'type': 'FeatureCollection'}
-		geo_munic_selecionado['features'] = []
+		st.title(f'Planilha Boletim de Urna (ZONA ELEITORA) ' )
 
-		#lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado['features'] ]#.keys()
+		df_bu = df_qtd_bu.copy() #monta_planilha(df)
+		df_bu.ANO_ELEICAO = df_bu.ANO_ELEICAO.astype("str") 
 		
-		#lista_munic = [ x['properties']['name'] for x in geo_munic_selecionado ]#.keys()
-		#inputNumbers = range(0,len(lista_munic))
-		#r = random.sample(inputNumbers,len(lista_munic))
+		st.markdown(f"""Visualização das 20 primeiras linhas. """)
+		st.markdown(f"""Para visualizar todas as **{len(df_bu)}** linhas fazer download do arquivo.""")
+		st.dataframe( df_bu.head(20), width = 750)
 
-		#dados = pd.DataFrame(zip(lista_munic, r),columns=['MUNI','VR'])
-		dados = df_planilha.query(monta_query(dict_query))
-		dados = dados.loc[(dados.PERC_GASTO != np.Inf) &
-								#	(df_planilha.SG_PARTIDO.isin(['PT','PMDB','PSL']) ) &
-									(dados.PERC_GASTO <= 1), 
-								['NM_UE','PERC_GASTO']]
+		csv_bu = convert_df(df_bu)
+		st.download_button( label="Download Dados(.csv)",data=csv_bu,
+							file_name='boletim_urna.csv', mime='text/csv')
 
-		#teste = df_final.loc[ df_final.PERC_GASTO == np.Inf]
-		dados.fillna(0,inplace=True)
+		st.title(f'Planilha RECEITAS' )
 
-		for muni in geo_munic['features'][:]:
-			#print(muni)
-			if muni['properties']['name'].upper() in dados.NM_UE.unique():
-		  		geo_munic_selecionado['features'].append(muni)
-
-
-		dados2 = dados.set_index('NM_UE')['PERC_GASTO']
-		#st.dataframe( dados.describe(), width = 750)
-
-		m = folium.Map(
-		  #tiles="Cartodb Positron",
-		  #tiles="Stamen Watercolor",
-		  width="100%", height="100%",
-		  #width=900, height=600,
-		  location= [-15.77972, -47.92972],
-		  zoom_start=4
-		)
-		folium.Choropleth(
-		  geo_data=geo_munic_selecionado,
-		  name="choropleth",
-		  data=dados2,
-		  #data=state_data,
-		  #columns=["MUNI", "VR"],
-		  key_on="properties.name",
-		  fill_color= "OrRd",#"YlOrRd", #"YlGn",
-		  #fill_opacity=0.7,
-		  #line_opacity=0.2,
-		  legend_name=" `%` dos Gastos"
-		).add_to(m)
-
-		folium_static(m, width=600)
+		df_receitas2 = df_receitas.copy() #monta_planilha(df)
+		df_receitas2.ANO_ELEICAO = df_receitas2.ANO_ELEICAO.astype("str") 
 		
+		st.markdown(f"""Visualização das 20 primeiras linhas. """)
+		st.markdown(f"""Para visualizar todas as **{len(df_receitas2)}** linhas fazer download do arquivo.""")
+		st.dataframe( df_receitas2.head(20), width = 750)
 
-		st.title(f'OPÇÃO 2 DO MAPA' )
-		r2 = [ x['geometry']['coordinates'][0][0] for x in geo_munic_selecionado['features'] ]#.keys()
+		csv_receitas = convert_df(df_receitas2)
+		st.download_button( label="Download Dados(.csv)",data=csv_receitas,
+							file_name='receitas.csv', mime='text/csv')
 
-		m = folium.Map(
-		  #tiles="Cartodb Positron",
-		  #tiles="Stamen Watercolor",
-		  width="100%", height="100%",
-		  #width=900, height=600,
-		  location= [-15.77972, -47.92972],
-		  zoom_start=4
-		)
-		for x in r2:
-		  #print(x[1],x[0])
-		  folium.Circle(
-		      location =  [x[1],x[0]], #[lat_, long_],
-		      radius=11,
-		    ).add_to(m)
-		folium_static(m, width=600)
+		st.title(f'Planilha DESPESAS' )
 
+		df_despespas2 = df_desp_contrat_paga.copy() #monta_planilha(df)
+		df_despespas2.ANO_ELEICAO = df_despespas2.ANO_ELEICAO.astype("str") 
+		
+		st.markdown(f"""Visualização das 20 primeiras linhas. """)
+		st.markdown(f"""Para visualizar todas as **{len(df_despespas2)}** linhas fazer download do arquivo.""")
+		st.dataframe( df_despespas2.head(20), width = 750)
+
+		csv_despesas = convert_df(df_despespas2)
+		st.download_button( label="Download Dados(.csv)",data=csv_despesas,
+							file_name='despesas.csv', mime='text/csv')
 
 with guia2:
 	'''
