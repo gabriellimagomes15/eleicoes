@@ -9,8 +9,19 @@ from urllib.request import urlopen
 from io import BytesIO
 import numpy as np
 import plotly.express as px
+from branca.colormap import linear
 
-#(allow_output_mutation=True)
+@st.cache_data 
+def retorna_geo_munic(lista_munic):
+  geo_munic_selecionado = {'type': 'FeatureCollection'}
+  geo_munic_selecionado['features'] = []
+
+  for muni in geo_munic['features'][:]:
+        #print(muni)
+        if muni['properties']['name'].upper() in lista_munic:
+            geo_munic_selecionado['features'].append(muni)
+  return geo_munic_selecionado
+
 @st.cache_data 
 def carregar_dados():
 	print("lendo dados")
@@ -224,32 +235,108 @@ with guia1:
 							file_name='despesas.csv', mime='text/csv')
 
 with guia2:
-	'''
-	m,soma_df,filtro_uf = plot_mapa(dict_query)
-
-	col1, col2, col3 = st.columns(3)
-	col1.metric("QTD Candidatos", filtro_uf.NM_CANDIDATO.nunique()) #, "1.2 °F")
-	col2.metric("QTD Eleitos", len(filtro_uf.query("DS_SIT_TOT_TURNO=='ELEITO'").DS_SIT_TOT_TURNO) ) #, "-8%")
-	col3.metric("Proporção Votos (total)", f"""
-									{round(filtro_uf.QT_VOTOS_NOMINAIS_VALIDOS.sum()/
-									df.query(f"SG_UF == '{FILTRO_UF}' and NR_TURNO == '{FILTRO_NR_TURNO}'  ").QT_VOTOS_NOMINAIS_VALIDOS.sum(),3 )*100} %""" ) #, , "4%")
-
-	with st.container():
-		#col1 = st.columns([1])
-
-		#with col1:
-			# call to render Folium map in Streamlit
-			#st_data = st_folium(m, width=725)
-			#st_data = 
-		folium_static(m, width=600)
+	FILTRO_SG_PARTIDO = st.selectbox('Selecione o partido:', df_qtd_bu.sort_values('SG_PARTIDO').SG_PARTIDO.unique())
 	
-	with st.container():
-		col2,col3 = st.columns([0.8,0.2])
+	FILTRO_DS_CARGO = st.selectbox('Selecione o partido:', df_qtd_bu.DS_CARGO_PERGUNTA.unique())
 
-		with col2:
-			st.header('Votos')
-			st.dataframe(soma_df.rename(columns = {'NM_MUNICIPIO':'MUNICIPIO',
-										 'PERCT_VOTOS':'% Votos'} ),
-						width = 500)#.sort_values("QT_VOTOS_NOMINAIS_VALIDOS"))  # Same as st.write(df)
+	#FILTRO_NR_TURNO = st.radio('Selecione o turno:', df_qtd_bu.NR_TURNO.unique())
+	if "load_map" not in st.session_state:
+		st.session_state.load_map = False
 
-	'''
+	botao_filtrar = st.button('Filtrar')
+
+	if botao_filtrar:
+		st.session_state.load_map = True
+
+		dict_query = {
+			  #"NR_TURNO": FILTRO_NR_TURNO,
+			  "DS_CARGO_PERGUNTA": FILTRO_DS_CARGO,
+			  "SG_PARTIDO": FILTRO_SG_PARTIDO          
+			}
+
+		query = monta_query(dict_query)
+		df_eleitos = df_qtd_bu.query(' and '.join( [query, "DS_SIT_TOT_TURNO == 'ELEITO'" ]))
+		df_nao_eleitos = df_qtd_bu.query(' and '.join( [query, "DS_SIT_TOT_TURNO != 'ELEITO'" ]))
+
+		qtd_total = len(df_eleitos) + len(df_nao_eleitos)
+		qtd_eleitos = len(df_eleitos)
+		qtd_nao_eleitos = len(df_nao_eleitos)
+
+		st.markdown(f"""QTD CANDIDATOS: **{qtd_total}** """)
+		st.markdown(f"""QTD ELEITOS: **{qtd_eleitos}({np.round((qtd_eleitos/qtd_total)*100)}%)**""")
+		st.markdown(f"""QTD NÃO ELEITOS: **{qtd_nao_eleitos}({np.round((qtd_nao_eleitos/qtd_total)*100)}%)**""")
+		
+		geo_munic_eleitos     = retorna_geo_munic(df_eleitos.NM_MUNICIPIO.unique())
+		geo_munic_nao_eleitos = retorna_geo_munic(df_nao_eleitos.NM_MUNICIPIO.unique())
+
+		dict_query_despesas = {"SG_PARTIDO": FILTRO_SG_PARTIDO}
+		df_despesas_partido = df_desp_contrat_paga.query(monta_query(dict_query_despesas))
+
+		soma_despesas = (df_despesas_partido.groupby(['ANO_ELEICAO','NR_TURNO',
+		                                             'SG_UF'])
+		                  .agg(TOTAL_DESPESAS = ('VR_PAGTO_DESPESA', 'sum'))
+		                  .reset_index()
+		                )
+
+		df_total_despesas = (soma_despesas.groupby(['ANO_ELEICAO','SG_UF'])
+		                  .agg(TOTAL_DESPESAS = ('TOTAL_DESPESAS', 'sum'))
+		                  .reset_index())
+
+		dados2 = df_total_despesas.set_index('SG_UF')['TOTAL_DESPESAS']
+		dados2_log = np.log(dados2)
+
+		dados_cores = dados2_log.copy()
+		cores = linear.OrRd_09.scale(dados_cores.min(),dados_cores.max(),max_labels = 3)
+
+
+		#if botao_filtrar and st.session_state.load_map:
+		#st.session_state.load_map = False
+
+		m = folium.Map(
+				  width="100%", height="100%",
+				  location= [-15.77972, -47.92972],
+				  zoom_start=4
+				)
+		cores.caption = "Despesas"
+		cores.add_to(m)
+
+		folium.GeoJson(geo_uf,
+           style_function = lambda x:{
+               "fillColor": cores(dados_cores[x['id']]) if x['id'] in dados2.index else 'black',
+               "weight":0.3,
+           }).add_to(m)
+
+
+		r2 = [ x['geometry']['coordinates'][0][0] for x in geo_munic_nao_eleitos['features'] ]#.keys()
+		radius = 3
+		for x in r2:
+		  folium.CircleMarker(
+				location =  [x[1],x[0]], #[lat_, long_],
+				radius = radius,
+				color  = "red",# "cornflowerblue",
+				stroke = False,
+				weight = 0.5,
+				fill   = True,
+				fill_opacity = 0.6,
+				opacity = 1,
+				#popup   = "{} pixels".format(radius),
+				#tooltip = "I am in pixels",
+		    ).add_to(m)
+
+		r2 = [ x['geometry']['coordinates'][0][0] for x in geo_munic_eleitos['features'] ]#.keys()
+		radius = 3.5
+		for x in r2:
+		  folium.CircleMarker(
+		      	location =  [x[1],x[0]], #[lat_, long_],
+				radius = radius,
+				color  = "green",# "cornflowerblue",
+				stroke = False,
+				weight = 0.5,
+				fill   = True,
+				fill_opacity = 0.8,
+				opacity = 1,
+				#popup   = "{} pixels".format(radius),
+				#tooltip = "I am in pixels",
+		    ).add_to(m)
+
+		folium_static(m)
